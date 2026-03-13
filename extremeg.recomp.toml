@@ -1,0 +1,86 @@
+# ============================================================================
+#  Extreme-G (N64, US) — N64Recomp Configuration
+# ============================================================================
+#
+#  Static recompilation config for Extreme-G (1998, Acclaim / Probe Entertainment)
+#  ROM: Extreme-G (U) [!].z64 | Game Code: NEGE | CRC1: 0xFDA245D2
+#
+#  This file tells N64Recomp how to process the ROM and generate native C code.
+# ============================================================================
+
+[input]
+entrypoint = 0x8004B400
+input_rom_path = "Extreme-G (U) [!].z64"
+output_path = "RecompiledFuncs"
+symbols_file_path = "symbols.toml"
+functions_per_output_file = 50
+game_code = "NEGE"
+
+# ============================================================================
+#  Patches
+# ============================================================================
+#
+#  N64Recomp auto-handles common libultra math/mem functions.
+#  Below we handle game-specific conflicts and hardware-dependent code.
+
+[patches]
+
+# Functions renamed to avoid MSVC / C runtime conflicts
+renamed_funcs = []
+
+# Functions that use N64 hardware directly (cop0 debug regs, etc.)
+stubbed_funcs = [
+    # --- OS / Kernel (reimplemented by ultramodern) ---
+    "osCreateThread",
+    "osStartThread",
+    "osSetThreadPri",
+    "osGetThreadPri",
+    "osStopThread",
+    "osDestroyThread",
+    "osCreateMesgQueue",
+    "osSendMesg",
+    "osRecvMesg",
+    "osJamMesg",
+    "osSetEventMesg",
+    "osCreatePiManager",
+    "osCreateViManager",
+    "osViSetEvent",
+    "osViSetMode",
+    "osViSetSpecialFeatures",
+    "osViSwapBuffer",
+    "osViBlack",
+    "osContInit",
+    "osContStartReadData",
+    "osContGetReadData",
+    "osEPiStartDma",
+    "osPiStartDma",
+    "osEPiReadIo",
+    "osEPiWriteIo",
+    "osCartRomInit",
+    "osAiSetFrequency",
+    "osAiSetNextBuffer",
+    "osAiGetLength",
+    "osAiGetStatus",
+    "osSetTimer",
+    "osStopTimer",
+    "osGetTime",
+    "osGetCount",
+    "osVirtualToPhysical",
+    "osPhysicalToVirtual",
+    "osInvalDCache",
+    "osInvalICache",
+    "osWritebackDCache",
+    "osWritebackDCacheAll",
+    "osMapTLB",
+    "osUnmapTLBAll",
+    "osSetIntMask",
+    "osGetMemSize",
+    "osInitialize",
+    "__osDisableInt",
+    "__osRestoreInt",
+    "__osGetCause",
+    "__osGetSR",
+]
+
+# Functions that exist but should not be recompiled (unused/debug)
+ignored_funcs = []

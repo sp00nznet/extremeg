@@ -1,0 +1,26 @@
+# Build output
+build/
+out/
+
+# ROM files (user must provide their own)
+*.z64
+*.n64
+*.v64
+
+# IDE
+.vs/
+.vscode/
+*.user
+CMakeSettings.json
+
+# Diagnostic logs
+*.log
+run_diag.ps1
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+Thumbs.db
+.DS_Store
