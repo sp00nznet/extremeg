@@ -1,19 +1,5 @@
 # Extreme-G Recompiled
 
-```
-    ______  __ _______ ____  ______ __  ___ ______          ______
-   / __/ / / /_  __/ _ \/ __/ /  |/  // __/         / ___/
-  / _/ >  <   / / / , _/ _/ / /|_/ // _/   _____  / (_ /
- /___/_/|_|  /_/ /_/|_/___//_/  /_//___/  /____/  \___/
-
-           ██████╗ ███████╗ ██████╗ ██████╗ ███╗   ███╗██████╗
-           ██╔══██╗██╔════╝██╔════╝██╔═══██╗████╗ ████║██╔══██╗
-           ██████╔╝█████╗  ██║     ██║   ██║██╔████╔██║██████╔╝
-           ██╔══██╗██╔══╝  ██║     ██║   ██║██║╚██╔╝██║██╔═══╝
-           ██║  ██║███████╗╚██████╗╚██████╔╝██║ ╚═╝ ██║██║
-           ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝╚═╝     ╚═╝╚═╝
-```
-
 > **"Welcome to the future of racing. Again."**
 
 A **static recompilation** of [Extreme-G](https://en.wikipedia.org/wiki/Extreme-G) (Nintendo 64, 1998) — the brutally fast, weapon-packed futuristic bike racer by Probe Entertainment — rebuilt to run **natively on modern PCs** without emulation.
@@ -71,14 +57,19 @@ Every MIPS instruction becomes equivalent C at **build time**. Your CPU runs the
 | **Title** | `extremeg` |
 | **Game Code** | `NEGE` |
 | **Region** | USA (NTSC) |
-| **Entry Point** | `0x8004B400` |
+| **Entry Point** | `0x8004B8A0` |
 | **CRC1** | `0xFDA245D2` |
 | **CRC2** | `0xA74A3D47` |
 | **ROM Size** | 8 MB (8,388,608 bytes) |
-| **Compression** | 121 gzip sections throughout ROM |
+| **Compression** | 51 LZSS blocks (custom, not gzip) |
+| **Code Size** | 320 KB decompressed (184 KB compressed) |
+| **Functions** | 707 identified (478 prologue + 229 leaf) |
+| **Code Range** | `0x8004B8A0` - `0x8009B898` |
 | **Developer** | Probe Entertainment |
 | **Publisher** | Acclaim Entertainment |
 | **Release** | 1998 |
+| **Build Path** | `d:\screen` (found in binary) |
+| **Dev Names** | Justin, Darren, Fergus |
 
 ---
 
@@ -87,28 +78,29 @@ Every MIPS instruction becomes equivalent C at **build time**. Your CPU runs the
 | Milestone | Status |
 |-----------|--------|
 | ROM Analysis | **COMPLETE** |
-| Compression Mapping (121 gzip sections) | **COMPLETE** |
+| LZSS Decompression (51 blocks) | **COMPLETE** |
 | Boot Code Analysis | **COMPLETE** |
-| Function Discovery | **IN PROGRESS** |
-| Symbol File Generation | IN PROGRESS |
-| N64Recomp Config | SCAFFOLDED |
+| Function Discovery (707 functions) | **COMPLETE** |
+| Symbol File Generation (707 functions) | **COMPLETE** |
+| RAM Base Identification (`0x8004B8A0`) | **COMPLETE** |
+| N64Recomp Config | **COMPLETE** |
 | Build System (CMake) | SCAFFOLDED |
 | Debug Tooling | SCAFFOLDED |
-| libultra Stubbing | TODO |
-| N64Recomp Integration | TODO |
+| libultra Stubbing (~50 functions) | SCAFFOLDED |
+| N64Recomp Integration | **IN PROGRESS** |
 | N64ModernRuntime Integration | TODO |
 | RT64 Renderer Integration | TODO |
 | SDL2 Window + Input | TODO |
 | Audio Reimplementation | TODO |
 | Playable Build | **THE DREAM** |
 
-**Current Phase: ROM Analysis & Function Discovery**
+**Current Phase: N64Recomp Integration**
 
-The ROM is heavily gzip-compressed (121 sections), which means the main game code is packed and gets decompressed into RAM by the boot loader at runtime. We need to:
-1. Decompress each section
-2. Identify which contain executable code vs. assets
-3. Map function boundaries in the decompressed code
-4. Generate the full symbol table for N64Recomp
+The hard part is done — we cracked the compression. The ROM uses custom **LZSS compression** (not gzip as initially suspected), with the magic signature `LZSS` marking each block. The main game code lives in Block 0: **184 KB compressed → 320 KB decompressed**, containing **707 functions** mapped to RAM `0x8004B8A0` - `0x8009B898`.
+
+The decompressor was reverse-engineered from the boot code at ROM offset `0x1000`, which sets up the stack, decompresses the main code via LZSS, and jumps to the entry point. We found **51 LZSS blocks** total — 1 code block and 50 asset blocks (tracks, bike models, textures).
+
+Next step: feed the decompressed binary and symbol table to N64Recomp to generate native C code.
 
 ---
 
@@ -179,8 +171,10 @@ extremeg/
 ├── include/                  # Project headers
 ├── tools/
 │   ├── rom_analyzer.py       # ROM structure & function discovery
+│   ├── lzss_decompress.py    # LZSS decompressor (cracks the compression!)
 │   ├── string_dumper.py      # String extraction & categorization
 │   └── progress.py           # Recompilation progress tracker
+├── extracted/                # Decompressed code/data blocks (generated)
 ├── RecompiledFuncs/          # N64Recomp output (generated, not tracked)
 ├── rsp/                      # RSP microcode reimplementation
 ├── lib/                      # Dependencies (N64ModernRuntime, etc.)
@@ -191,12 +185,16 @@ extremeg/
 
 ## Things We've Found In The ROM
 
-The ROM is full of compressed data, but even the uncompressed sections reveal some gems:
+Cracking the LZSS compression and disassembling the code revealed some gems:
 
+- **Build path `d:\screen`** — Probe Entertainment was building from a `screen` directory on a D: drive. Classic late-90s dev setup
+- **Developer names: Justin, Darren, Fergus** — the crew who built this speed demon left their names in the binary
+- **`%s%d.tga`** — TGA texture loading format strings, confirming the asset pipeline
 - **`p_bikeen_a_BOX_*_pal`** / **`c_bikeen_a_BOX_*_chr`** — bike texture palettes and character data, at least 23 texture boxes per bike
-- **`Vrtbikeen_a_*`** — vertex data for bike models
-- **`Gfx uco`** — graphics microcode references
-- **121 gzip streams** — the game compresses *everything*. Tracks, models, textures, and code are all packed tight to fit in 8MB
+- **`Vrtbikeen_a_*`** — vertex data for bike 3D models
+- **`Strike`** — weapon/attack reference found in the game code
+- **51 LZSS blocks** — custom compression with the `LZSS` magic header. 1 code block (320KB), 50 asset blocks. Everything is packed tight to fit in 8MB
+- **707 functions** in the main code block — from tiny 28-byte leaf functions to a massive 24KB monster (probably the main game loop or renderer)
 
 ---
 

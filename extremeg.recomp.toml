@@ -9,7 +9,7 @@
 # ============================================================================
 
 [input]
-entrypoint = 0x8004B400
+entrypoint = 0x8004B8A0
 input_rom_path = "Extreme-G (U) [!].z64"
 output_path = "RecompiledFuncs"
 symbols_file_path = "symbols.toml"

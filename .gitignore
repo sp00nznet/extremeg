@@ -17,6 +17,10 @@ CMakeSettings.json
 *.log
 run_diag.ps1
 
+# Extracted/generated data (user regenerates from ROM)
+extracted/
+*.bin
+
 # Python
 __pycache__/
 *.pyc
