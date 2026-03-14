@@ -3,84 +3,106 @@
 # ============================================================================
 #
 #  Static recompilation config for Extreme-G (1998, Acclaim / Probe Entertainment)
-#  ROM: Extreme-G (U) [!].z64 | Game Code: NEGE | CRC1: 0xFDA245D2
+#  ROM: extremeg_recomp.z64 (patched with decompressed LZSS code)
+#  Game Code: NEGE | CRC1: 0xFDA245D2
 #
-#  This file tells N64Recomp how to process the ROM and generate native C code.
+#  The original ROM uses LZSS compression for the game code.
+#  Use tools/build_recomp_rom.py to create the patched ROM first.
 # ============================================================================
 
 [input]
-entrypoint = 0x8004B8A0
-input_rom_path = "Extreme-G (U) [!].z64"
-output_path = "RecompiledFuncs"
+# entrypoint omitted — our code is LZSS-compressed and doesn't sit at ROM 0x1000
+# The function "recomp_entrypoint" is defined directly in symbols.toml
 symbols_file_path = "symbols.toml"
+rom_file_path = "extremeg_recomp.z64"
+output_func_path = "RecompiledFuncs"
+single_file_output = false
 functions_per_output_file = 50
-game_code = "NEGE"
 
 # ============================================================================
 #  Patches
 # ============================================================================
 #
-#  N64Recomp auto-handles common libultra math/mem functions.
-#  Below we handle game-specific conflicts and hardware-dependent code.
+#  N64Recomp's built-in symbol lists automatically handle common libultra
+#  functions (osCreateThread, osSendMesg, sinf, cosf, memcpy, etc.)
+#  Only list game-specific overrides here.
 
 [patches]
 
 # Functions renamed to avoid MSVC / C runtime conflicts
-renamed_funcs = []
+renamed = []
 
-# Functions that use N64 hardware directly (cop0 debug regs, etc.)
-stubbed_funcs = [
-    # --- OS / Kernel (reimplemented by ultramodern) ---
-    "osCreateThread",
-    "osStartThread",
-    "osSetThreadPri",
-    "osGetThreadPri",
-    "osStopThread",
-    "osDestroyThread",
-    "osCreateMesgQueue",
-    "osSendMesg",
-    "osRecvMesg",
-    "osJamMesg",
-    "osSetEventMesg",
-    "osCreatePiManager",
-    "osCreateViManager",
-    "osViSetEvent",
-    "osViSetMode",
-    "osViSetSpecialFeatures",
-    "osViSwapBuffer",
-    "osViBlack",
-    "osContInit",
-    "osContStartReadData",
-    "osContGetReadData",
-    "osEPiStartDma",
-    "osPiStartDma",
-    "osEPiReadIo",
-    "osEPiWriteIo",
-    "osCartRomInit",
-    "osAiSetFrequency",
-    "osAiSetNextBuffer",
-    "osAiGetLength",
-    "osAiGetStatus",
-    "osSetTimer",
-    "osStopTimer",
-    "osGetTime",
-    "osGetCount",
-    "osVirtualToPhysical",
-    "osPhysicalToVirtual",
-    "osInvalDCache",
-    "osInvalICache",
-    "osWritebackDCache",
-    "osWritebackDCacheAll",
-    "osMapTLB",
-    "osUnmapTLBAll",
-    "osSetIntMask",
-    "osGetMemSize",
-    "osInitialize",
-    "__osDisableInt",
-    "__osRestoreInt",
-    "__osGetCause",
-    "__osGetSR",
+# Functions to stub out (replace with empty return)
+stubs = [
+    # Boot/init code uses COP0 hardware registers (bc0f, mtc0, etc.)
+    # Hardware init is handled by ultramodern at runtime
+    "recomp_entrypoint",
+    # External libultra / system functions (reimplemented by ultramodern)
+    "func_80000000",
+    "func_8009F310",
+    "func_8009F630",
+    "func_8009F690",
+    "func_800A13E8",
+    "func_800A1D9C",
+    "func_800A2E38",
+    "func_800A521C",
+    "func_800A63CC",
+    "func_800A71A4",
+    "func_800AB2C8",
+    "func_800AB8FC",
+    "func_800AC38C",
+    "func_800ACCA4",
+    "func_800B34A8",
+    "func_800B6320",
+    "func_800B6A90",
+    "func_800B8D30",
+    "func_800BCD5C",
+    "func_800BD038",
+    "func_800BFEA0",
+    "func_800C06E4",
+    "func_800C0E14",
+    "func_800C1C14",
+    "func_800C6884",
+    "func_800D3FF0",
+    "func_800DB2C4",
+    "func_800DCFE8",
+    "func_800EF650",
+    "func_800EF69C",
+    "func_800EF808",
+    "func_800F1FD4",
+    "func_800F2058",
+    "func_800F20B0",
+    "func_800F2148",
+    "func_800F236C",
+    "func_800F253C",
+    "func_800F49BC",
+    "func_800F4A74",
+    "func_800FB668",
+    "func_800FB9F0",
+    "func_800FBBD0",
+    "func_800FC9F8",
+    "func_800FCB00",
+    "func_800FCB44",
+    "func_800FCB88",
+    "func_800FCF8C",
+    "func_800FEFA8",
+    "func_80100488",
+    "func_80100560",
+    "func_80100FA8",
+    "func_801018B8",
+    "func_801045D8",
+    "func_80105BA0",
+    # Cache-flush functions (CACHE instruction not supported by recomp, not in reimplemented list)
+    "func_800762A4",
+    "func_800762C0",
+    # COP0 / hardware register functions (game-specific, not in reimplemented list)
+    "func_800762DC",
+    "func_800762E8",
+    "func_800763AC",
+    "func_80076708",
+    # Functions with branches outside their bounds (tail calls / fall-throughs)
+    "func_80054C54",
 ]
 
-# Functions that exist but should not be recompiled (unused/debug)
-ignored_funcs = []
+# Functions to ignore completely (not recompiled)
+ignored = []

@@ -63,7 +63,7 @@ Every MIPS instruction becomes equivalent C at **build time**. Your CPU runs the
 | **ROM Size** | 8 MB (8,388,608 bytes) |
 | **Compression** | 51 LZSS blocks (custom, not gzip) |
 | **Code Size** | 320 KB decompressed (184 KB compressed) |
-| **Functions** | 707 identified (478 prologue + 229 leaf) |
+| **Functions** | 726 recompiled (93 libultra identified) |
 | **Code Range** | `0x8004B8A0` - `0x8009B898` |
 | **Developer** | Probe Entertainment |
 | **Publisher** | Acclaim Entertainment |
@@ -80,27 +80,46 @@ Every MIPS instruction becomes equivalent C at **build time**. Your CPU runs the
 | ROM Analysis | **COMPLETE** |
 | LZSS Decompression (51 blocks) | **COMPLETE** |
 | Boot Code Analysis | **COMPLETE** |
-| Function Discovery (707 functions) | **COMPLETE** |
-| Symbol File Generation (707 functions) | **COMPLETE** |
+| Function Discovery (726 functions) | **COMPLETE** |
+| Symbol File Generation | **COMPLETE** |
 | RAM Base Identification (`0x8004B8A0`) | **COMPLETE** |
 | N64Recomp Config | **COMPLETE** |
-| Build System (CMake) | SCAFFOLDED |
-| Debug Tooling | SCAFFOLDED |
-| libultra Stubbing (~50 functions) | SCAFFOLDED |
-| N64Recomp Integration | **IN PROGRESS** |
-| N64ModernRuntime Integration | TODO |
-| RT64 Renderer Integration | TODO |
-| SDL2 Window + Input | TODO |
-| Audio Reimplementation | TODO |
+| N64Recomp Integration (726 recompiled functions) | **COMPLETE** |
+| Build System (CMake) | **COMPLETE** |
+| N64ModernRuntime Integration | **COMPLETE** |
+| RT64 Renderer Integration | **COMPLETE** |
+| SDL2 Window + Input | **COMPLETE** |
+| libultra Identification (93 functions) | **COMPLETE** |
+| ROM Mapping Fix (VRAM-to-ROM) | **COMPLETE** |
+| BSS Clearing (3 regions) | **COMPLETE** |
+| Custom Entrypoint Patch | **COMPLETE** |
+| OS Stubs (33 internal functions) | **COMPLETE** |
+| Game Boot (heap, threads, VI) | **WORKING** |
+| Audio Driver Init | **CRASHING** |
+| Audio Reimplementation | IN PROGRESS |
+| RSP Microcode Handling | TODO |
 | Playable Build | **THE DREAM** |
 
-**Current Phase: N64Recomp Integration**
+**Current Phase: Audio Driver Debugging**
 
-The hard part is done — we cracked the compression. The ROM uses custom **LZSS compression** (not gzip as initially suspected), with the magic signature `LZSS` marking each block. The main game code lives in Block 0: **184 KB compressed → 320 KB decompressed**, containing **707 functions** mapped to RAM `0x8004B8A0` - `0x8009B898`.
+**The game boots.** SDL window opens, RT64 initializes (tested on RTX 5070), ROM validates, heap allocator works correctly, game threads are created, and VI events fire. The game gets all the way into its main initialization before crashing in the audio driver.
 
-The decompressor was reverse-engineered from the boot code at ROM offset `0x1000`, which sets up the stack, decompresses the main code via LZSS, and jumps to the entry point. We found **51 LZSS blocks** total — 1 code block and 50 asset blocks (tracks, bike models, textures).
+**What's working:**
+- Full static recompilation: 726 functions recompiled from MIPS to native C
+- 93 libultra functions identified and properly named (osCreateThread, osCreateMesgQueue, osSendMesg, osViSwapBuffer, osSpTaskLoad, osAiSetNextBuffer, etc.)
+- ROM mapping corrected: decompressed code placed at ROM offset 0x1000, loaded to RDRAM at the correct VRAM address
+- Custom entrypoint clears 3 BSS regions and calls game init (bypassing COP0 hardware setup)
+- 33 internal OS function stubs for helpers ultramodern doesn't reimplement
+- SDL2 audio backend with 48kHz output
+- Keyboard input mapped to N64 controller
 
-Next step: feed the decompressed binary and symbol table to N64Recomp to generate native C code.
+**Current crash:** Access violation in `func_800888D0` during audio driver initialization. The call chain is `func_8004DE78` (game logic thread) -> `func_80053978` -> `func_80058890` -> `func_80082420` -> `func_800888D0`. The audio driver code in the 0x80082000-0x80089000 range needs further reverse engineering.
+
+**Key technical details:**
+- The ROM uses custom **LZSS compression** (51 blocks total — 1 code, 50 asset)
+- Main code: 184 KB compressed -> 320 KB decompressed, mapped to `0x8004B8A0` - `0x8009B898`
+- ROM mapping: `VRAM_TO_ROM = vram - 0x8004B8A0 + 0x1000`
+- Boot code at `0x80000400` decompresses LZSS, clears BSS, jumps to `0x8004DC8C`
 
 ---
 
@@ -134,25 +153,30 @@ py tools/string_dumper.py summary
 py tools/progress.py
 ```
 
-### Building (once recompilation is ready)
+### Building
 
 ```bash
-# 1. Build N64Recomp
-cd /path/to/N64Recomp
-cmake -B build -G "Visual Studio 17 2022"
-cmake --build build --config Release --target N64RecompCLI
+# 1. Place your ROM in the project root
+cp /path/to/your/rom.z64 "Extreme-G (U) [!].z64"
 
-# 2. Recompile the game (MIPS -> C)
+# 2. Build the patched recomp ROM (decompresses LZSS, fixes mapping)
+py tools/build_recomp_rom.py
+
+# 3. Run N64Recomp to generate native C from MIPS
 N64Recomp.exe extremeg.recomp.toml
 
-# 3. Build the native executable
-cd /path/to/extremeg
+# 4. Re-apply the custom entrypoint patch in RecompiledFuncs/funcs_0.c
+#    (replaces the generated recomp_entrypoint with BSS-clearing version)
+
+# 5. Build the native executable
 cmake -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
 
-# 4. RIDE
+# 6. Run (place extremeg_recomp.z64 in the build/Release directory)
 build/Release/ExtremeGRecompiled.exe
 ```
+
+> **Note:** Step 4 must be done after every N64Recomp run. The custom entrypoint skips COP0 hardware init, clears 3 BSS regions, and calls the game's real init function.
 
 ---
 
@@ -163,21 +187,25 @@ extremeg/
 ├── README.md                 # You are here, going 500mph
 ├── CMakeLists.txt            # CMake build configuration
 ├── extremeg.recomp.toml      # N64Recomp configuration
-├── symbols.toml              # Function symbols (building...)
+├── symbols.toml              # Function symbols (93 libultra + 633 game functions)
 ├── .gitignore                # Keeps ROMs out of git
 ├── src/
 │   ├── main.cpp              # Entry point, SDL window, runtime init
-│   └── stubs.cpp             # N64 OS function stubs
+│   ├── audio.cpp             # SDL2 audio backend (48kHz)
+│   ├── os_stubs.cpp          # Internal OS function stubs (33 functions)
+│   ├── rt64_render_context.cpp  # RT64 D3D12/Vulkan renderer bridge
+│   └── section_table.cpp     # Recompiled function lookup tables
 ├── include/                  # Project headers
 ├── tools/
 │   ├── rom_analyzer.py       # ROM structure & function discovery
-│   ├── lzss_decompress.py    # LZSS decompressor (cracks the compression!)
+│   ├── lzss_decompress.py    # LZSS decompressor
+│   ├── build_recomp_rom.py   # Builds patched ROM for recompilation
 │   ├── string_dumper.py      # String extraction & categorization
 │   └── progress.py           # Recompilation progress tracker
 ├── extracted/                # Decompressed code/data blocks (generated)
-├── RecompiledFuncs/          # N64Recomp output (generated, not tracked)
+├── RecompiledFuncs/          # N64Recomp output (726 functions, generated)
 ├── rsp/                      # RSP microcode reimplementation
-├── lib/                      # Dependencies (N64ModernRuntime, etc.)
+├── lib/                      # Dependencies (N64ModernRuntime, RT64, etc.)
 └── screenshots/              # Progress screenshots
 ```
 
