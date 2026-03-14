@@ -4,7 +4,7 @@
 
 [[section]]
 name = "code"
-rom = 0x1000
+rom = 0x4C4A0
 vram = 0x8004B8A0
 size = 0x4FFF8
 
@@ -417,6 +417,11 @@ size = 0x4FFF8
   name = "func_800585B8"
   vram = 0x800585B8
   size = 0x180
+
+  [[section.functions]]
+  name = "func_80058738"
+  vram = 0x80058738
+  size = 0x8
 
   [[section.functions]]
   name = "func_80058740"
@@ -2226,12 +2231,7 @@ size = 0x4FFF8
   [[section.functions]]
   name = "func_800802EC"
   vram = 0x800802EC
-  size = 0xC
-
-  [[section.functions]]
-  name = "func_800802F8"
-  vram = 0x800802F8
-  size = 0x28
+  size = 0x34
 
   [[section.functions]]
   name = "func_80080320"

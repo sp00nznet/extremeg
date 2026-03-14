@@ -57,7 +57,7 @@ Every MIPS instruction becomes equivalent C at **build time**. Your CPU runs the
 | **Title** | `extremeg` |
 | **Game Code** | `NEGE` |
 | **Region** | USA (NTSC) |
-| **Entry Point** | `0x8004B8A0` |
+| **Entry Point** | `0x8004B400` (original), `0x80000400` (recomp) |
 | **CRC1** | `0xFDA245D2` |
 | **CRC2** | `0xA74A3D47` |
 | **ROM Size** | 8 MB (8,388,608 bytes) |
@@ -95,31 +95,36 @@ Every MIPS instruction becomes equivalent C at **build time**. Your CPU runs the
 | Custom Entrypoint Patch | **COMPLETE** |
 | OS Stubs (33 internal functions) | **COMPLETE** |
 | Game Boot (heap, threads, VI) | **WORKING** |
-| Audio Driver Init | **CRASHING** |
+| Heap Allocator Init | **WORKING** |
+| Audio Driver Init | **CRASHING** — data section not loaded |
 | Audio Reimplementation | IN PROGRESS |
 | RSP Microcode Handling | TODO |
 | Playable Build | **THE DREAM** |
 
-**Current Phase: Audio Driver Debugging**
+**Current Phase: ROM Data Section Loading**
 
-**The game boots.** SDL window opens, RT64 initializes (tested on RTX 5070), ROM validates, heap allocator works correctly, game threads are created, and VI events fire. The game gets all the way into its main initialization before crashing in the audio driver.
+**The game boots.** SDL window opens, RT64 initializes (tested on RTX 5070), ROM validates, heap allocator works correctly (8 allocations succeed), game threads are created, and VI events fire. The game gets into audio initialization before crashing due to uninitialized data.
 
 **What's working:**
 - Full static recompilation: 726 functions recompiled from MIPS to native C
 - 93 libultra functions identified and properly named (osCreateThread, osCreateMesgQueue, osSendMesg, osViSwapBuffer, osSpTaskLoad, osAiSetNextBuffer, etc.)
-- ROM mapping corrected: decompressed code placed at ROM offset 0x1000, loaded to RDRAM at the correct VRAM address
-- Custom entrypoint clears 3 BSS regions and calls game init (bypassing COP0 hardware setup)
+- ROM mapping: entrypoint 0x80000400, decompressed code at ROM offset 0x4C4A0 (VRAM 0x8004B8A0)
+- Custom entrypoint clears 3 BSS regions, initializes heap pointer, calls game init
+- Fall-through function fix: func_800802EC+func_800802F8 merged (MIPS fall-through pattern)
+- Missing function added: func_80058738 (called via function pointer, 8 bytes)
 - 33 internal OS function stubs for helpers ultramodern doesn't reimplement
-- SDL2 audio backend with 48kHz output
+- SDL2 audio backend with 48kHz output, heap allocator, game threads
 - Keyboard input mapped to N64 controller
 
-**Current crash:** Access violation in `func_800888D0` during audio driver initialization. The call chain is `func_8004DE78` (game logic thread) -> `func_80053978` -> `func_80058890` -> `func_80082420` -> `func_800888D0`. The audio driver code in the 0x80082000-0x80089000 range needs further reverse engineering.
+**Current crash:** Heap break in audio init (`func_80058890`) — the 9th allocation requests 0x4B3FC779 bytes (garbage). The allocation size is read from VRAM 0x8004B66C, which is in the **data section below the decompressed code start** (0x8004B8A0). On the original N64, the boot code at 0x8004B400 decompresses LZSS to 0x8004B8A0 and sets up additional data in the 0x8004B400-0x8004B8A0 range. In our recomp, this data section contains raw ROM bytes (compressed LZSS residue) instead of the correct initialized data.
 
 **Key technical details:**
 - The ROM uses custom **LZSS compression** (51 blocks total — 1 code, 50 asset)
-- Main code: 184 KB compressed -> 320 KB decompressed, mapped to `0x8004B8A0` - `0x8009B898`
-- ROM mapping: `VRAM_TO_ROM = vram - 0x8004B8A0 + 0x1000`
-- Boot code at `0x80000400` decompresses LZSS, clears BSS, jumps to `0x8004DC8C`
+- LZSS block at ROM 0x14AC: 184 KB compressed -> 320 KB decompressed
+- Code mapped to `0x8004B8A0` - `0x8009B898`, ROM offset 0x4C4A0
+- Original ROM entrypoint is `0x8004B400` (at ROM 0x4C000), NOT `0x80000400`
+- Boot stub at 0x8004B400 initializes data at 0x8004B400-0x8004B89F before decompressing code
+- **Next step:** Reverse-engineer the boot stub at ROM 0x4C000 to understand how it populates the data section below 0x8004B8A0, then replicate this in the custom entrypoint
 
 ---
 

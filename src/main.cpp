@@ -32,7 +32,8 @@
 
 // From section_table.cpp
 extern SectionTableEntry section_table[];
-extern const size_t num_sections;
+extern const size_t num_sections_export;
+#define num_sections num_sections_export
 
 // From rt64_render_context.cpp
 extern std::unique_ptr<ultramodern::renderer::RendererContext> create_extremeg_render_context(
@@ -50,7 +51,7 @@ extern void extremeg_set_frequency(uint32_t freq);
 // ROM Hash: Extreme-G (US)
 // CRC1: 0xFDA245D2
 // =============================================================================
-constexpr uint64_t EXTREMEG_ROM_HASH = 0xA33E295E40182114ULL; // XXH3_64bits of extremeg_recomp.z64
+constexpr uint64_t EXTREMEG_ROM_HASH = 0x838059BF9C10A6F9ULL; // XXH3_64bits of extremeg_recomp.z64
 
 // =============================================================================
 // Global state
@@ -281,7 +282,7 @@ int main(int argc, char* argv[]) {
     game_entry.mod_game_id = "extremeg";
     game_entry.save_type = recomp::SaveType::Eep4k;
     game_entry.is_enabled = true;
-    game_entry.entrypoint_address = (gpr)(int32_t)0x8004B8A0;
+    game_entry.entrypoint_address = (gpr)(int32_t)0x80000400;
     game_entry.entrypoint = recomp_entrypoint;
 
     // Register overlay/section tables

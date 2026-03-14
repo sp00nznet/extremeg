@@ -22,10 +22,13 @@ OUTPUT_FILE = "extremeg_recomp.z64"
 
 # Code mapping
 # librecomp's init() loads ROM[0x1000..] to RDRAM[entrypoint & 0x7FFFFFF]
-# Since entrypoint = RAM_BASE, the ROM offset for VRAM X is:
-#   rom_offset = X - RAM_BASE + 0x1000
-RAM_BASE = 0x8004B8A0
-VRAM_TO_ROM = lambda vram: vram - RAM_BASE + 0x1000
+# We set entrypoint = 0x80000400 (N64 IPL3 load address) so that the original
+# ROM data at lower addresses (boot code, data tables used by DMA) is preserved.
+# The decompressed code goes at the offset where VRAM 0x8004B8A0 maps to:
+#   rom_offset = 0x8004B8A0 - 0x80000400 + 0x1000 = 0x4C4A0
+ENTRYPOINT = 0x80000400
+CODE_VRAM = 0x8004B8A0
+VRAM_TO_ROM = lambda vram: vram - ENTRYPOINT + 0x1000
 
 
 def find_lzss_blocks(data):
@@ -120,10 +123,12 @@ def main():
     print(f"  Actually got: {len(code)} bytes")
 
     # Calculate where to place the decompressed code
-    rom_offset = VRAM_TO_ROM(RAM_BASE)
+    rom_offset = VRAM_TO_ROM(CODE_VRAM)
     rom_end = rom_offset + len(code)
     print(f"\nPlacing code at ROM offset 0x{rom_offset:06X} - 0x{rom_end:06X}")
-    print(f"  (VRAM 0x{RAM_BASE:08X} - 0x{RAM_BASE + len(code):08X})")
+    print(f"  (VRAM 0x{CODE_VRAM:08X} - 0x{CODE_VRAM + len(code):08X})")
+    print(f"  Entrypoint: 0x{ENTRYPOINT:08X}")
+    print(f"  Original ROM data preserved at 0x1000-0x{rom_offset:06X}")
 
     # Create output ROM — copy original and overlay decompressed code
     output = bytearray(rom)
@@ -135,8 +140,8 @@ def main():
     # Write decompressed code at the correct offset
     output[rom_offset:rom_offset + len(code)] = code
 
-    # Update ROM header entry point to match our RAM base
-    struct.pack_into('>I', output, 8, RAM_BASE)
+    # Update ROM header entry point
+    struct.pack_into('>I', output, 8, ENTRYPOINT)
 
     # Recalculate CRC (simplified — N64Recomp may not check CRC)
     # For now, leave CRC as-is
